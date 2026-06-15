@@ -211,13 +211,139 @@ pipeline = Pipeline()
 
 
 # --------------------------------------------------------------------------- #
+# Legal pages (self-hosted ToS + Privacy Policy for TikTok / YouTube app review)
+# Override the contact address with the CONTACT_EMAIL env var if you like.
+# --------------------------------------------------------------------------- #
+_LEGAL_TEMPLATE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__ — WMPosting</title>
+<style>
+  body{max-width:760px;margin:40px auto;padding:0 20px;
+       font:16px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+       color:#1a1a1a;background:#fff}
+  h1{font-size:1.6rem} h2{font-size:1.1rem;margin-top:1.6em}
+  a{color:#0a58ca} code{background:#f2f2f2;padding:1px 5px;border-radius:4px}
+  .muted{color:#666;font-size:.9rem} nav{margin-bottom:24px}
+  nav a{margin-right:16px}
+</style></head>
+<body>
+<nav><a href="/">Home</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+__BODY__
+</body></html>"""
+
+_INDEX_BODY = """
+<h1>WMPosting</h1>
+<p>WMPosting is an automated tool that creates and publishes original short-form
+videos about the FIFA World Cup 2026 — animated motion graphics, scoreboards,
+match timelines, and statistics — to the social media account you connect and
+authorize.</p>
+<p class="muted">See our <a href="/privacy">Privacy Policy</a> and
+<a href="/terms">Terms of Service</a>.</p>"""
+
+_PRIVACY_BODY = """
+<h1>Privacy Policy</h1>
+<p class="muted">Last updated: __DATE__</p>
+<p>WMPosting ("the App", "we", "us") is an automated content-publishing tool
+that posts original short-form videos to social media accounts that you
+explicitly connect and authorize. This policy explains what data we handle and
+why.</p>
+<h2>1. Information we collect</h2>
+<ul>
+<li><strong>Account authorization.</strong> When you connect a TikTok or YouTube
+account through the platform's official OAuth flow, we receive and store the
+access token, refresh token, and your account identifier (such as the TikTok
+<code>open_id</code> or YouTube channel ID) needed to publish on your behalf.
+We never receive or store your password.</li>
+<li><strong>Content performance.</strong> For videos the App publishes, we
+retrieve public engagement metrics (views, likes, comments, shares) from the
+platform's API.</li>
+</ul>
+<h2>2. How we use your information</h2>
+<ul>
+<li>To publish original videos — animated motion graphics, statistics, and
+recaps about the FIFA World Cup 2026 — to the account you connected.</li>
+<li>To measure the performance of those videos so the App can improve the
+content it produces.</li>
+</ul>
+<h2>3. Sharing</h2>
+<p>We do not sell or share your data with third parties. Data is transmitted
+only to the platforms you connect (TikTok, YouTube) through their official APIs.
+Video captions are generated using Anthropic's API — no account credentials or
+personal data are sent to that service.</p>
+<h2>4. Storage and retention</h2>
+<p>Tokens and metrics are stored in our private database and retained only while
+your account remains connected. You may disconnect at any time and request
+deletion of all stored data by contacting us.</p>
+<h2>5. Contact</h2>
+<p>For privacy questions or deletion requests, email
+<a href="mailto:__CONTACT__">__CONTACT__</a>.</p>"""
+
+_TERMS_BODY = """
+<h1>Terms of Service</h1>
+<p class="muted">Last updated: __DATE__</p>
+<h2>1. The service</h2>
+<p>WMPosting ("the App") is an automated tool that generates and publishes
+original short-form videos to social media accounts you connect and
+authorize.</p>
+<h2>2. Your responsibilities</h2>
+<ul>
+<li>You may only connect accounts that you own or are authorized to manage.</li>
+<li>You are responsible for the content published through your connected
+accounts and for complying with the terms and policies of each platform
+(including TikTok and YouTube).</li>
+</ul>
+<h2>3. Content</h2>
+<p>All videos produced by the App are original works — animated graphics,
+statistics, and data visualizations. The App does not use copyrighted broadcast
+footage.</p>
+<h2>4. Availability and warranty</h2>
+<p>The App is provided "as is", without warranty of any kind. We do not
+guarantee uninterrupted or error-free operation.</p>
+<h2>5. Limitation of liability</h2>
+<p>To the maximum extent permitted by law, we are not liable for any damages
+arising from the use of, or inability to use, the App.</p>
+<h2>6. Changes</h2>
+<p>We may update these terms from time to time. Continued use of the App after
+changes take effect constitutes acceptance of the revised terms.</p>
+<h2>7. Contact</h2>
+<p>Questions about these terms:
+<a href="mailto:__CONTACT__">__CONTACT__</a>.</p>"""
+
+
+def _page(title: str, body: str) -> str:
+    from datetime import datetime, timezone
+
+    contact = os.environ.get("CONTACT_EMAIL", "pueschel.enno07@gmail.com")
+    date = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    return (
+        _LEGAL_TEMPLATE.replace("__TITLE__", title)
+        .replace("__BODY__", body)
+        .replace("__CONTACT__", contact)
+        .replace("__DATE__", date)
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Status / health API
 # --------------------------------------------------------------------------- #
 def create_app():
     from fastapi import FastAPI
-    from fastapi.responses import JSONResponse
+    from fastapi.responses import HTMLResponse, JSONResponse
 
     app = FastAPI(title="wm2026-growth-engine", version="1.0")
+
+    @app.get("/", response_class=HTMLResponse)
+    def index():
+        return _page("WMPosting", _INDEX_BODY)
+
+    @app.get("/privacy", response_class=HTMLResponse)
+    def privacy():
+        return _page("Privacy Policy", _PRIVACY_BODY)
+
+    @app.get("/terms", response_class=HTMLResponse)
+    def terms():
+        return _page("Terms of Service", _TERMS_BODY)
 
     @app.get("/health")
     def health():
