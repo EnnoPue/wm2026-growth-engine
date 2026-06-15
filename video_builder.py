@@ -374,6 +374,8 @@ class VideoBuilder:
         # 2) per-beat clips with zoom + fade
         clips: list[Path] = []
         ff = ffmpeg_bin()
+        preset = cfg("video.preset", "veryfast")  # light on CPU/RAM for small containers
+        last_err = ""
         for i, (fp, dur) in enumerate(frame_specs):
             clip = frames_dir / f"c{i:02d}.mp4"
             frames = max(1, int(dur * FPS))
@@ -387,19 +389,23 @@ class VideoBuilder:
             )
             try:
                 run([ff, "-y", "-loop", "1", "-i", str(fp), "-t", f"{dur:.2f}",
-                     "-vf", vf, "-r", str(FPS), "-an", str(clip)], timeout=180)
+                     "-vf", vf, "-r", str(FPS), "-an",
+                     "-c:v", "libx264", "-preset", preset, "-threads", "1", str(clip)], timeout=180)
                 clips.append(clip)
             except Exception as exc:
+                last_err = str(exc)
                 log.warning("video_builder: clip %d failed (%s) — static fallback", i, exc)
                 try:
                     run([ff, "-y", "-loop", "1", "-i", str(fp), "-t", f"{dur:.2f}",
-                         "-vf", f"scale={W}:{H},format=yuv420p", "-r", str(FPS), "-an", str(clip)], timeout=120)
+                         "-vf", f"scale={W}:{H},format=yuv420p", "-r", str(FPS), "-an",
+                         "-c:v", "libx264", "-preset", preset, "-threads", "1", str(clip)], timeout=120)
                     clips.append(clip)
                 except Exception as exc2:
+                    last_err = str(exc2)
                     log.error("video_builder: static clip %d also failed (%s)", i, exc2)
 
         if not clips:
-            return {"status": "failed", "file_path": None, "duration": total}
+            return {"status": "failed", "file_path": None, "duration": total, "error": last_err[:600]}
 
         # 3) concat
         concat_file = frames_dir / "concat.txt"
@@ -408,10 +414,11 @@ class VideoBuilder:
         try:
             run([ff, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file),
                  "-c:v", cfg("video.codec", "libx264"), "-pix_fmt", cfg("video.pix_fmt", "yuv420p"),
+                 "-preset", preset, "-threads", "1",
                  "-crf", str(cfg("video.crf", 20)), "-r", str(FPS), str(silent)], timeout=300)
         except Exception as exc:
             log.error("video_builder: concat failed (%s)", exc)
-            return {"status": "failed", "file_path": None, "duration": total}
+            return {"status": "failed", "file_path": None, "duration": total, "error": str(exc)[:600]}
 
         # 4) audio (rights-cleared music if present, else silence) + final encode
         ok = self._mux_audio(ff, silent, out_path, total)
