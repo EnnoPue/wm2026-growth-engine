@@ -1,0 +1,49 @@
+# ---------------------------------------------------------------------------
+# wm2026-growth-engine — Python dependencies
+# Free-first. Every paid dependency has an open-source fallback in code.
+# Tested against Python 3.11+
+# ---------------------------------------------------------------------------
+
+# --- Core / runtime ---
+python-dotenv==1.0.1
+PyYAML==6.0.2
+pydantic==2.9.2
+pydantic-settings==2.5.2
+tenacity==9.0.0
+rich==13.9.4
+APScheduler==3.10.4
+orjson==3.10.7
+
+# --- Web / status API (Railway expects a bound port; doubles as dashboard) ---
+fastapi==0.115.4
+uvicorn[standard]==0.32.0
+
+# --- Database ---
+SQLAlchemy==2.0.35
+psycopg2-binary==2.9.9          # PostgreSQL (Railway). SQLite fallback is stdlib.
+
+# --- HTTP / APIs ---
+httpx==0.27.2
+requests==2.32.3
+
+# --- AI (primary). System runs WITHOUT this if key/dep is missing. ---
+anthropic==0.39.0
+
+# --- Video / image generation (all free + open source) ---
+Pillow==10.4.0
+numpy==2.1.2
+imageio==2.36.0
+imageio-ffmpeg==0.5.1           # ships a static ffmpeg if system ffmpeg absent
+moviepy==1.0.3                  # optional render path; ffmpeg path is primary
+
+# --- Speech-to-text for subtitles (free, local, no API) ---
+faster-whisper==1.0.3
+
+# --- YouTube upload (official Data API v3) ---
+google-api-python-client==2.149.0
+google-auth==2.35.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0
+
+# NOTE on TikTok: there is no pip SDK for the official Content Posting API.
+# upload_tiktok.py talks to it directly over httpx. No dependency required.

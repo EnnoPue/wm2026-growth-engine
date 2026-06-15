@@ -1,0 +1,52 @@
+# ---------------------------------------------------------------------------
+# Local development stack. Mirrors the Railway deployment:
+#   - app    : the growth engine (scheduler + status API)
+#   - db     : PostgreSQL 16
+# Run:  docker compose up --build
+# ---------------------------------------------------------------------------
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: wm2026
+      POSTGRES_PASSWORD: wm2026
+      POSTGRES_DB: wm2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/00_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wm2026"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Compose-internal DB URL overrides whatever is in .env
+      DATABASE_URL: postgresql://wm2026:wm2026@db:5432/wm2026
+      PORT: "8080"
+      TZ: UTC
+    ports:
+      - "8080:8080"
+    volumes:
+      # Persist generated videos + logs on the host during local dev
+      - ./output:/app/output
+      - ./logs:/app/logs
+      - ./data:/app/data
+      # Mount source for fast iteration (comment out for prod-like runs)
+      - ./:/app
+
+volumes:
+  pgdata:

@@ -1,0 +1,52 @@
+[
+  {
+    "id": "demo-101",
+    "stage": "GROUP",
+    "home_team": "Germany",
+    "away_team": "Japan",
+    "home_score": 3,
+    "away_score": 2,
+    "status": "FINISHED",
+    "utc_kickoff": "2026-06-16T19:00:00+00:00",
+    "events": [
+      {"minute": 8, "type": "goal", "team": "Japan", "player": "T. Kubo", "detail": ""},
+      {"minute": 25, "type": "goal", "team": "Japan", "player": "A. Ueda", "detail": ""},
+      {"minute": 47, "type": "goal", "team": "Germany", "player": "J. Musiala", "detail": ""},
+      {"minute": 79, "type": "goal", "team": "Germany", "player": "K. Havertz", "detail": ""},
+      {"minute": 90, "type": "goal", "team": "Germany", "player": "F. Wirtz", "detail": "90+3"}
+    ],
+    "stats": {"possession": {"Germany": 64, "Japan": 36}, "shots": {"Germany": 21, "Japan": 8}}
+  },
+  {
+    "id": "demo-102",
+    "stage": "QF",
+    "home_team": "England",
+    "away_team": "France",
+    "home_score": 1,
+    "away_score": 1,
+    "status": "FINISHED",
+    "utc_kickoff": "2026-07-04T19:00:00+00:00",
+    "events": [
+      {"minute": 52, "type": "goal", "team": "France", "player": "K. Mbappé", "detail": "penalty"},
+      {"minute": 84, "type": "goal", "team": "England", "player": "H. Kane", "detail": "penalty"},
+      {"minute": 61, "type": "red_card", "team": "France", "player": "A. Tchouaméni", "detail": ""}
+    ],
+    "stats": {"possession": {"England": 58, "France": 42}, "shots": {"England": 16, "France": 11}}
+  },
+  {
+    "id": "demo-103",
+    "stage": "R16",
+    "home_team": "USA",
+    "away_team": "Netherlands",
+    "home_score": 2,
+    "away_score": 1,
+    "status": "FINISHED",
+    "utc_kickoff": "2026-06-30T23:00:00+00:00",
+    "events": [
+      {"minute": 33, "type": "goal", "team": "Netherlands", "player": "C. Gakpo", "detail": ""},
+      {"minute": 70, "type": "goal", "team": "USA", "player": "C. Pulisic", "detail": ""},
+      {"minute": 88, "type": "goal", "team": "USA", "player": "R. Aaronson", "detail": ""}
+    ],
+    "stats": {"possession": {"USA": 47, "Netherlands": 53}, "shots": {"USA": 12, "Netherlands": 14}}
+  }
+]
