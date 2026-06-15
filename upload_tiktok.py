@@ -22,6 +22,7 @@ from typing import Any
 import httpx
 from sqlalchemy import select
 
+import tiktok_oauth
 from database import Upload, Video, db
 from settings import settings
 from utils import get_logger, truncate, utcnow
@@ -35,11 +36,12 @@ API = "https://open.tiktokapis.com/v2"
 class TikTokUploader:
     @property
     def available(self) -> bool:
-        return bool(settings.tiktok_access_token)
+        return tiktok_oauth.connected()
 
     def _headers(self) -> dict[str, str]:
+        token = tiktok_oauth.valid_access_token() or ""
         return {
-            "Authorization": f"Bearer {settings.tiktok_access_token}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json; charset=UTF-8",
         }
 

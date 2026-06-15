@@ -28,6 +28,8 @@ from rights_discovery import rights
 from settings import OUTPUT_DIR, cfg, settings
 from story_engine import story_engine
 from subtitle_generator import subtitle_generator
+
+import tiktok_oauth
 from upload_tiktok import tiktok_uploader
 from upload_youtube import youtube_uploader
 from utils import get_logger, iso, new_id, slugify, utcnow, write_json
@@ -217,7 +219,8 @@ pipeline = Pipeline()
 _LEGAL_TEMPLATE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>__TITLE__ — WMPosting</title>
+<title>__TITLE__ — YFC</title>
+__VERIFY_META__
 <style>
   body{max-width:760px;margin:40px auto;padding:0 20px;
        font:16px/1.6 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
@@ -226,6 +229,9 @@ _LEGAL_TEMPLATE = """<!doctype html>
   a{color:#0a58ca} code{background:#f2f2f2;padding:1px 5px;border-radius:4px}
   .muted{color:#666;font-size:.9rem} nav{margin-bottom:24px}
   nav a{margin-right:16px}
+  .btn{display:inline-block;padding:12px 20px;border-radius:8px;text-decoration:none;
+       font-weight:600;color:#fff;background:#fe2c55;margin:8px 8px 8px 0}
+  .btn.secondary{background:#0a58ca}
 </style></head>
 <body>
 <nav><a href="/">Home</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
@@ -233,8 +239,8 @@ __BODY__
 </body></html>"""
 
 _INDEX_BODY = """
-<h1>WMPosting</h1>
-<p>WMPosting is an automated tool that creates and publishes original short-form
+<h1>YFC</h1>
+<p>YFC is an automated tool that creates and publishes original short-form
 videos about the FIFA World Cup 2026 — animated motion graphics, scoreboards,
 match timelines, and statistics — to the social media account you connect and
 authorize.</p>
@@ -244,7 +250,7 @@ authorize.</p>
 _PRIVACY_BODY = """
 <h1>Privacy Policy</h1>
 <p class="muted">Last updated: __DATE__</p>
-<p>WMPosting ("the App", "we", "us") is an automated content-publishing tool
+<p>YFC ("the App", "we", "us") is an automated content-publishing tool
 that posts original short-form videos to social media accounts that you
 explicitly connect and authorize. This policy explains what data we handle and
 why.</p>
@@ -283,7 +289,7 @@ _TERMS_BODY = """
 <h1>Terms of Service</h1>
 <p class="muted">Last updated: __DATE__</p>
 <h2>1. The service</h2>
-<p>WMPosting ("the App") is an automated tool that generates and publishes
+<p>YFC ("the App") is an automated tool that generates and publishes
 original short-form videos to social media accounts you connect and
 authorize.</p>
 <h2>2. Your responsibilities</h2>
@@ -311,13 +317,30 @@ changes take effect constitutes acceptance of the revised terms.</p>
 <a href="mailto:__CONTACT__">__CONTACT__</a>.</p>"""
 
 
+def _public_base() -> str:
+    return os.environ.get(
+        "PUBLIC_BASE_URL", "https://wm2026-growth-engine-production.up.railway.app"
+    ).rstrip("/")
+
+
+def _redirect_uri() -> str:
+    return _public_base() + "/tiktok/callback"
+
+
 def _page(title: str, body: str) -> str:
     from datetime import datetime, timezone
 
     contact = os.environ.get("CONTACT_EMAIL", "pueschel.enno07@gmail.com")
     date = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    verify = os.environ.get("TIKTOK_SITE_VERIFICATION", "").strip()
+    meta = (
+        f'<meta name="tiktok-developers-site-verification" content="{verify}">'
+        if verify
+        else ""
+    )
     return (
         _LEGAL_TEMPLATE.replace("__TITLE__", title)
+        .replace("__VERIFY_META__", meta)
         .replace("__BODY__", body)
         .replace("__CONTACT__", contact)
         .replace("__DATE__", date)
@@ -329,13 +352,13 @@ def _page(title: str, body: str) -> str:
 # --------------------------------------------------------------------------- #
 def create_app():
     from fastapi import FastAPI
-    from fastapi.responses import HTMLResponse, JSONResponse
+    from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 
     app = FastAPI(title="wm2026-growth-engine", version="1.0")
 
     @app.get("/", response_class=HTMLResponse)
     def index():
-        return _page("WMPosting", _INDEX_BODY)
+        return _page("YFC", _INDEX_BODY)
 
     @app.get("/privacy", response_class=HTMLResponse)
     def privacy():
@@ -344,6 +367,152 @@ def create_app():
     @app.get("/terms", response_class=HTMLResponse)
     def terms():
         return _page("Terms of Service", _TERMS_BODY)
+
+    # ---- TikTok URL-property verification (file method) -------------------
+    # If TikTok asks you to host a tiktokXXXX.txt signature file, set
+    # TIKTOK_VERIFY_FILENAME + TIKTOK_VERIFY_CONTENT in Railway. (For the
+    # meta-tag method set TIKTOK_SITE_VERIFICATION instead — no route needed.)
+    _verify_file = os.environ.get("TIKTOK_VERIFY_FILENAME", "").strip()
+    if _verify_file:
+
+        @app.get("/" + _verify_file, response_class=PlainTextResponse)
+        def tiktok_verify_file():
+            return os.environ.get("TIKTOK_VERIFY_CONTENT", "")
+
+    # ---- TikTok connect / OAuth / test post ------------------------------
+    def _admin() -> str:
+        return os.environ.get("ADMIN_KEY", "").strip()
+
+    @app.get("/connect", response_class=HTMLResponse)
+    def connect(key: str = ""):
+        admin = _admin()
+        if not admin:
+            return _page(
+                "Connect TikTok",
+                "<h1>One-time setup</h1><p>Set an <code>ADMIN_KEY</code> environment "
+                "variable in Railway (any secret string), then open "
+                "<code>/connect?key=YOUR_ADMIN_KEY</code>.</p>",
+            )
+        if key != admin:
+            return HTMLResponse(
+                _page(
+                    "Connect TikTok",
+                    "<h1>Unauthorized</h1><p>Append <code>?key=YOUR_ADMIN_KEY</code> "
+                    "to the URL.</p>",
+                ),
+                status_code=403,
+            )
+        if not (settings.tiktok_client_key and settings.tiktok_client_secret):
+            return _page(
+                "Connect TikTok",
+                "<h1>Connect TikTok</h1><p>Set <code>TIKTOK_CLIENT_KEY</code> and "
+                "<code>TIKTOK_CLIENT_SECRET</code> in Railway first, then reload.</p>",
+            )
+        state = new_id("st_")
+        tiktok_oauth.remember_state(state)
+        url = tiktok_oauth.authorize_url(_redirect_uri(), state)
+        status_txt = "connected ✅" if tiktok_oauth.connected() else "not connected"
+        body = (
+            "<h1>Connect TikTok</h1>"
+            f"<p>Status: <strong>{status_txt}</strong></p>"
+            f'<p><a class="btn" href="{url}">Connect TikTok</a></p>'
+            f'<p><a class="btn secondary" href="/tiktok/post-test?key={admin}">'
+            "Post a test video</a></p>"
+            f'<p class="muted">Redirect URI in use: <code>{_redirect_uri()}</code></p>'
+        )
+        return _page("Connect TikTok", body)
+
+    @app.get("/tiktok/callback", response_class=HTMLResponse)
+    def tiktok_callback(
+        code: str = "", state: str = "", error: str = "", error_description: str = ""
+    ):
+        if not tiktok_oauth.state_ok(state):
+            return HTMLResponse(
+                _page("TikTok", "<h1>Invalid state</h1><p>Start again from "
+                      "<code>/connect</code>.</p>"),
+                status_code=403,
+            )
+        if error or not code:
+            return _page(
+                "TikTok", f"<h1>Authorization failed</h1><p>{error} {error_description}</p>"
+            )
+        try:
+            rec = tiktok_oauth.save_tokens(
+                tiktok_oauth.exchange_code(code, _redirect_uri())
+            )
+        except Exception as exc:  # noqa: BLE001
+            return _page("TikTok", f"<h1>Token exchange failed</h1><pre>{exc}</pre>")
+        admin = _admin()
+        oid = rec.get("open_id") or ""
+        body = (
+            "<h1>✅ TikTok connected</h1>"
+            f"<p>Account <code>{oid}</code> is connected. The access token is stored "
+            "in the database and refreshed automatically — nothing to copy.</p>"
+            f'<p><a class="btn secondary" href="/tiktok/post-test?key={admin}">'
+            "Post a test video</a></p>"
+        )
+        return _page("TikTok connected", body)
+
+    @app.get("/tiktok/post-test", response_class=HTMLResponse)
+    def tiktok_post_test(key: str = ""):
+        admin = _admin()
+        if not admin or key != admin:
+            return HTMLResponse(_page("TikTok", "<h1>Unauthorized</h1>"), status_code=403)
+        if not tiktok_oauth.connected():
+            return _page(
+                "TikTok",
+                f'<h1>Not connected</h1><p>Connect first at '
+                f'<a href="/connect?key={admin}">/connect</a>.</p>',
+            )
+        try:
+            from fallback_content_engine import build_package
+
+            demo = {
+                "id": "demo-tiktok",
+                "home_team": "Germany",
+                "away_team": "Brazil",
+                "home_score": 3,
+                "away_score": 2,
+                "stage": "SEMI-FINAL",
+                "events": [
+                    {"minute": 12, "type": "goal", "team": "Germany", "player": "Musiala"},
+                    {"minute": 34, "type": "goal", "team": "Brazil", "player": "Rodrygo"},
+                    {"minute": 58, "type": "goal", "team": "Germany", "player": "Wirtz"},
+                    {"minute": 77, "type": "goal", "team": "Brazil", "player": "Vinicius"},
+                    {"minute": 90, "type": "goal", "team": "Germany", "player": "Havertz"},
+                ],
+                "stats": {
+                    "possession": {"Germany": 52, "Brazil": 48},
+                    "shots": {"Germany": 14, "Brazil": 11},
+                },
+            }
+            pkg = build_package(
+                demo, {"id": "drama", "angle": "drama", "template": "timeline_reveal"}
+            )
+            out_dir = OUTPUT_DIR / "tiktok_demo"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            render = video_builder.build(
+                pkg, "Germany 3-2 Brazil — instant classic", out_dir
+            )
+            if render.get("status") != "rendered" or not render.get("file_path"):
+                return _page("TikTok", f"<h1>Render failed</h1><pre>{render}</pre>")
+            res = tiktok_uploader.do_upload(
+                render["file_path"],
+                {
+                    "caption": "FIFA World Cup 2026 — automated test post #worldcup #football",
+                    "title": "WC2026 test",
+                },
+            )
+            body = (
+                "<h1>✅ Test video posted</h1>"
+                f"<p>publish_id: <code>{res.get('remote_id', '')}</code></p>"
+                f"<p>status: <code>{res.get('publish_status', '')}</code></p>"
+                "<p>Open your TikTok app — sandbox posts are private (SELF_ONLY) and "
+                "land in your profile/drafts.</p>"
+            )
+            return _page("TikTok", body)
+        except Exception as exc:  # noqa: BLE001
+            return _page("TikTok", f"<h1>Post failed</h1><pre>{exc}</pre>")
 
     @app.get("/health")
     def health():
