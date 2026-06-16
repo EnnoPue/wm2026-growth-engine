@@ -86,6 +86,7 @@ class Settings(BaseSettings):
     poll_interval_minutes: int = 15
     dry_run: bool = False
     enable_uploads: bool = True
+    scheduler_enabled: bool = True   # set false to pause the autonomous (cost-incurring) content cycle
 
     # rights discovery
     rights_discovery_enabled: bool = True

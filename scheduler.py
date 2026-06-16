@@ -51,14 +51,18 @@ def start_scheduler(pipeline: Any) -> BackgroundScheduler:
     poll = int(cfg("scheduler.poll_interval_minutes", settings.poll_interval_minutes))
     perf_hours = int(cfg("scheduler.performance_refresh_hours", 6))
 
-    # main content pipeline
-    sched.add_job(
-        _safe(pipeline.run_cycle, "content_cycle"),
-        "interval",
-        minutes=poll,
-        next_run_time=datetime.now() + timedelta(seconds=10),
-        id="content_cycle",
-    )
+    # main content pipeline — the ONLY job that spends Anthropic credit.
+    # Gated so it can be paused for cost control via SCHEDULER_ENABLED=false.
+    if settings.scheduler_enabled:
+        sched.add_job(
+            _safe(pipeline.run_cycle, "content_cycle"),
+            "interval",
+            minutes=poll,
+            next_run_time=datetime.now() + timedelta(seconds=10),
+            id="content_cycle",
+        )
+    else:
+        log.warning("scheduler: content_cycle PAUSED (SCHEDULER_ENABLED=false) — no autonomous generation/cost")
 
     # performance + learning
     def _refresh():
@@ -77,7 +81,8 @@ def start_scheduler(pipeline: Any) -> BackgroundScheduler:
 
     sched.start()
     _scheduler = sched
-    log.info("scheduler: started (content every %dm, perf every %dh)", poll, perf_hours)
+    log.info("scheduler: started (content_cycle=%s, perf every %dh)",
+             f"every {poll}m" if settings.scheduler_enabled else "PAUSED", perf_hours)
     return sched
 
 

@@ -14,7 +14,7 @@ from typing import Any
 
 from ai_client import ai
 from fallback_content_engine import build_package
-from settings import cfg
+from settings import cfg, settings
 from utils import get_logger, truncate
 
 log = get_logger("story_engine")
@@ -72,6 +72,8 @@ class StoryEngine:
         variants = cfg("video_variants", [])
         if not variants:
             variants = [{"id": "drama", "angle": "drama", "template": "timeline_reveal"}]
+        # Cost control: each variant calls Claude — cap at VIDEOS_PER_MATCH.
+        variants = variants[: max(1, int(settings.videos_per_match))]
         packages: list[dict[str, Any]] = []
         for vc in variants:
             try:
