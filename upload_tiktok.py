@@ -49,23 +49,34 @@ class TikTokUploader:
         size = os.path.getsize(file_path)
         title = truncate(meta.get("caption") or meta.get("title") or "World Cup 2026", 2200)
 
-        init_body = {
-            "post_info": {
-                "title": title,
-                "privacy_level": settings.tiktok_privacy_level,
-                "disable_comment": False,
-                "disable_duet": False,
-                "disable_stitch": False,
-            },
-            "source_info": {
-                "source": "FILE_UPLOAD",
-                "video_size": size,
-                "chunk_size": size,        # single chunk for typical Short
-                "total_chunk_count": 1,
-            },
+        source_info = {
+            "source": "FILE_UPLOAD",
+            "video_size": size,
+            "chunk_size": size,            # single chunk for typical Short
+            "total_chunk_count": 1,
         }
+        mode = (settings.tiktok_post_mode or "direct").lower()
+        if mode == "inbox":
+            # Upload to the creator's TikTok inbox/drafts — works for UNAUDITED
+            # apps (scope video.upload); the creator taps "Post" in the app.
+            endpoint = f"{API}/post/publish/inbox/video/init/"
+            init_body = {"source_info": source_info}
+        else:
+            # Direct Post straight to the profile — requires an AUDITED app
+            # (scope video.publish); unaudited apps get 403 on this endpoint.
+            endpoint = f"{API}/post/publish/video/init/"
+            init_body = {
+                "post_info": {
+                    "title": title,
+                    "privacy_level": settings.tiktok_privacy_level,
+                    "disable_comment": False,
+                    "disable_duet": False,
+                    "disable_stitch": False,
+                },
+                "source_info": source_info,
+            }
         with httpx.Client(timeout=60) as c:
-            r = c.post(f"{API}/post/publish/video/init/", headers=self._headers(), json=init_body)
+            r = c.post(endpoint, headers=self._headers(), json=init_body)
             r.raise_for_status()
             data = r.json()
             if data.get("error", {}).get("code") not in (None, "ok"):

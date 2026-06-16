@@ -105,6 +105,7 @@ class Settings(BaseSettings):
     tiktok_access_token: str = ""
     tiktok_open_id: str = ""
     tiktok_privacy_level: str = "PUBLIC_TO_EVERYONE"
+    tiktok_post_mode: str = "direct"   # "direct" (needs audited app) | "inbox" (drafts; works pre-audit)
 
     # team priority (comma separated; falls back to config.yaml)
     priority_teams: str = ""
